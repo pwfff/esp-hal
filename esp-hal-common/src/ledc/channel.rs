@@ -9,7 +9,6 @@ use super::{
 use crate::{
     gpio::{OutputPin, OutputSignal},
     peripheral::{Peripheral, PeripheralRef},
-    peripherals::ledc::RegisterBlock,
 };
 
 /// Fade parameter sub-errors
@@ -121,7 +120,6 @@ pub trait ChannelHW<O: OutputPin> {
 
 /// Channel struct
 pub struct Channel<'a, S: TimerSpeed, O: OutputPin> {
-    ledc: &'a RegisterBlock,
     timer: Option<&'a dyn TimerIFace<S>>,
     number: Number,
     output_pin: PeripheralRef<'a, O>,
@@ -131,9 +129,7 @@ impl<'a, S: TimerSpeed, O: OutputPin> Channel<'a, S, O> {
     /// Return a new channel
     pub fn new(number: Number, output_pin: impl Peripheral<P = O> + 'a) -> Self {
         crate::into_ref!(output_pin);
-        let ledc = unsafe { &*crate::peripherals::LEDC::ptr() };
         Channel {
-            ledc,
             timer: None,
             number,
             output_pin,
@@ -275,9 +271,10 @@ where
 macro_rules! set_channel {
     ($self: ident, $speed: ident, $num: literal, $timer_number: ident) => {{
         paste! {
-            $self.ledc.[<$speed sch $num _hpoint>]
+            let ledc = unsafe { &*crate::peripherals::LEDC::PTR };
+            ledc.[<$speed sch $num _hpoint>]
                 .write(|w| unsafe { w.[<hpoint>]().bits(0x0) });
-            $self.ledc.[<$speed sch $num _conf0>].modify(|_, w| unsafe {
+            ledc.[<$speed sch $num _conf0>].modify(|_, w| unsafe {
                 w.[<sig_out_en>]()
                     .set_bit()
                     .[<timer_sel>]()
@@ -293,9 +290,10 @@ macro_rules! set_channel {
 macro_rules! set_channel {
     ($self: ident, $speed: ident, $num: literal, $timer_number: ident) => {{
         paste! {
-            $self.ledc.[<ch $num _hpoint>]
+            let ledc = unsafe { &*crate::peripherals::LEDC::PTR };
+            ledc.[<ch $num _hpoint>]
                 .write(|w| unsafe { w.[<hpoint>]().bits(0x0) });
-            $self.ledc.[<ch $num _conf0>].modify(|_, w| unsafe {
+            ledc.[<ch $num _conf0>].modify(|_, w| unsafe {
                 w.[<sig_out_en>]()
                     .set_bit()
                     .[<timer_sel>]()
@@ -311,7 +309,8 @@ macro_rules! set_channel {
 macro_rules! start_duty_without_fading {
     ($self: ident, $speed: ident, $num: literal) => {
         paste! {
-            $self.ledc.[<$speed sch $num _conf1>].write(|w| unsafe {
+            let ledc = unsafe { &*crate::peripherals::LEDC::PTR };
+            ledc.[<$speed sch $num _conf1>].write(|w| unsafe {
                 w.[<duty_start>]()
                     .set_bit()
                     .[<duty_inc>]()
@@ -332,11 +331,12 @@ macro_rules! start_duty_without_fading {
 macro_rules! start_duty_without_fading {
     ($self: ident, $num: literal) => {
         paste! {
-            $self.ledc.[<ch $num _conf1>].write(|w|
+            let ledc = unsafe { &*crate::peripherals::LEDC::PTR };
+            ledc.[<ch $num _conf1>].write(|w|
                 w.[<duty_start>]()
                     .set_bit()
             );
-            $self.ledc.[<ch $num _gamma_wr>].write(|w| unsafe {
+            ledc.[<ch $num _gamma_wr>].write(|w| unsafe {
                 w.[<ch_gamma_duty_inc>]()
                     .set_bit()
                     .[<ch_gamma_duty_num>]()
@@ -355,7 +355,8 @@ macro_rules! start_duty_without_fading {
 macro_rules! start_duty_without_fading {
     ($self: ident, $num: literal) => {
         paste! {
-            $self.ledc.[<ch $num _conf1>].write(|w| unsafe {
+            let ledc = unsafe { &*crate::peripherals::LEDC::PTR };
+            ledc.[<ch $num _conf1>].write(|w| unsafe {
                 w.[<duty_start>]()
                     .set_bit()
                     .[<duty_inc>]()
@@ -376,7 +377,8 @@ macro_rules! start_duty_without_fading {
 macro_rules! start_duty_fade {
     ($self: ident, $speed: ident, $num: literal, $duty_inc: ident, $duty_steps: ident, $cycles_per_step: ident, $duty_per_cycle: ident) => {
         paste! {
-            $self.ledc.[<$speed sch $num _conf1>].write(|w| unsafe {
+            let ledc = unsafe { &*crate::peripherals::LEDC::PTR };
+            ledc.[<$speed sch $num _conf1>].write(|w| unsafe {
                 w.[<duty_start>]()
                     .set_bit()
                     .[<duty_inc>]()
@@ -397,11 +399,12 @@ macro_rules! start_duty_fade {
 macro_rules! start_duty_fade {
     ($self: ident, $num: literal, $duty_inc: ident, $duty_steps: ident, $cycles_per_step: ident, $duty_per_cycle: ident) => {
         paste! {
-            $self.ledc.[<ch $num _conf1>].write(|w|
+            let ledc = unsafe { &*crate::peripherals::LEDC::PTR };
+            ledc.[<ch $num _conf1>].write(|w|
                 w.[<duty_start>]()
                     .set_bit()
             );
-            $self.ledc.[<ch $num _gamma_wr>].write(|w| unsafe {
+            ledc.[<ch $num _gamma_wr>].write(|w| unsafe {
                 w.[<ch_gamma_duty_inc>]()
                     .variant($duty_inc)
                     .[<ch_gamma_duty_num>]()  /* count of incs before stopping */
@@ -411,11 +414,11 @@ macro_rules! start_duty_fade {
                     .[<ch_gamma_scale>]()
                     .bits($duty_per_cycle)
                 });
-            $self.ledc.[<ch $num _gamma_wr_addr>].write(|w| unsafe {
+            ledc.[<ch $num _gamma_wr_addr>].write(|w| unsafe {
                 w.[<ch_gamma_wr_addr>]()
                     .bits(0)
             });
-            $self.ledc.[<ch_gamma_conf>][$num].write(|w| unsafe {
+            ledc.[<ch_gamma_conf>][$num].write(|w| unsafe {
                 w.[<ch_gamma_entry_num>]()
                     .bits(0x1)
             });
@@ -428,7 +431,8 @@ macro_rules! start_duty_fade {
 macro_rules! start_duty_fade {
     ($self: ident, $num: literal, $duty_inc: ident, $duty_steps: ident, $cycles_per_step: ident, $duty_per_cycle: ident) => {
         paste! {{
-            $self.ledc.[<ch $num _conf1>].write(|w| unsafe {
+            let ledc = unsafe { &*crate::peripherals::LEDC::PTR };
+            ledc.[<ch $num _conf1>].write(|w| unsafe {
                 w.[<duty_start>]()
                     .set_bit()
                     .[<duty_inc>]()
@@ -449,7 +453,8 @@ macro_rules! start_duty_fade {
 macro_rules! set_duty {
     ($self: ident, $speed: ident, $num: literal, $duty: ident) => {{
         paste! {
-            $self.ledc
+            let ledc = unsafe { &*crate::peripherals::LEDC::PTR };
+            ledc
                 .[<$speed sch $num _duty>]
                 .write(|w| unsafe { w.[<duty>]().bits($duty << 4) });
         }
@@ -463,7 +468,8 @@ macro_rules! set_duty {
 macro_rules! set_duty {
     ($self: ident, $speed: ident, $num: literal, $duty: ident) => {{
         paste! {
-            $self.ledc
+            let ledc = unsafe { &*crate::peripherals::LEDC::PTR };
+            ledc
                 .[<ch $num _duty>]
                 .write(|w| unsafe { w.[<duty>]().bits($duty << 4) });
         }
@@ -477,10 +483,11 @@ macro_rules! set_duty {
 macro_rules! set_duty_fade {
     ($self: ident, $speed: ident, $num: literal, $start_duty: ident, $duty_inc: ident, $duty_steps: ident, $cycles_per_step: ident, $duty_per_cycle: ident) => {{
         paste! {
-            $self.ledc
+            let ledc = unsafe { &*crate::peripherals::LEDC::PTR };
+            ledc
                 .[<$speed sch $num _duty>]
                 .write(|w| unsafe { w.[<duty>]().bits($start_duty << 4) });
-            $self.ledc
+            ledc
                 .[<int_clr>]
                 .write(|w| { w.[<duty_chng_end_ $speed sch $num _int_clr>]().set_bit() });
         }
@@ -502,10 +509,11 @@ macro_rules! set_duty_fade {
 macro_rules! set_duty_fade {
     ($self: ident, $speed: ident, $num: literal, $start_duty: ident, $duty_inc: ident, $duty_steps: ident, $cycles_per_step: ident, $duty_per_cycle: ident) => {{
         paste! {
-            $self.ledc
+            let ledc = unsafe { &*crate::peripherals::LEDC::PTR };
+            ledc
                 .[<ch $num _duty>]
                 .write(|w| unsafe { w.[<duty>]().bits($start_duty << 4) });
-            $self.ledc
+            ledc
                 .[<int_clr>]
                 .write(|w| { w.[<duty_chng_end_ $speed sch $num _int_clr>]().set_bit() });
         }
@@ -526,10 +534,11 @@ macro_rules! set_duty_fade {
 macro_rules! set_duty_fade {
     ($self: ident, $speed: ident, $num: literal, $start_duty: ident, $duty_inc: ident, $duty_steps: ident, $cycles_per_step: ident, $duty_per_cycle: ident) => {{
         paste! {
-            $self.ledc
+            let ledc = unsafe { &*crate::peripherals::LEDC::PTR };
+            ledc
                 .[<ch $num _duty>]
                 .write(|w| unsafe { w.[<duty>]().bits($start_duty << 4) });
-            $self.ledc
+            ledc
                 .[<int_clr>]
                 .write(|w| { w.[<duty_chng_end_ch $num _int_clr>]().set_bit() });
         }
@@ -550,7 +559,8 @@ macro_rules! set_duty_fade {
 macro_rules! is_duty_fade_running {
     ($self: ident, $speed: ident, $num: literal) => {{
         paste! {
-            $self.ledc
+            let ledc = unsafe { &*crate::peripherals::LEDC::PTR };
+            ledc
                 .[<int_raw>]
                 .read()
                 .[<duty_chng_end_ $speed sch $num _int_raw>]()
@@ -563,7 +573,8 @@ macro_rules! is_duty_fade_running {
 macro_rules! is_duty_fade_running {
     ($self: ident, $speed: ident, $num: literal) => {{
         paste! {
-            $self.ledc
+            let ledc = unsafe { &*crate::peripherals::LEDC::PTR };
+            ledc
                 .[<int_raw>]
                 .read()
                 .[<duty_chng_end_ch $num _int_raw>]()
@@ -577,7 +588,8 @@ macro_rules! is_duty_fade_running {
 macro_rules! update_channel {
     ($self: ident, l, $num: literal) => {
         paste! {
-            $self.ledc
+            let ledc = unsafe { &*crate::peripherals::LEDC::PTR };
+            ledc
                 .[<lsch $num _conf0>]
                 .modify(|_, w| w.[<para_up>]().set_bit());
         }
@@ -590,7 +602,8 @@ macro_rules! update_channel {
 macro_rules! update_channel {
     ($self: ident, l, $num: literal) => {
         paste! {
-            $self.ledc
+            let ledc = unsafe { &*crate::peripherals::LEDC::PTR };
+            ledc
                 .[<ch $num _conf0>]
                 .modify(|_, w| w.[<para_up>]().set_bit());
         }
